@@ -29,3 +29,9 @@ build/
 # Environment variables
 .env
 .envs/
+
+# Local config file
+config.yaml
+
+# Added by goreleaser init:
+dist/
