@@ -5,12 +5,23 @@ import (
 	"firefly-iii-email-scanner/email"
 	"firefly-iii-email-scanner/firefly"
 	"firefly-iii-email-scanner/mattermost"
+	"flag"
 	"fmt"
 	"log"
 	"os"
 )
 
 func main() {
+	// Parse command line flags
+	dryRunFlag := flag.Bool("dry-run", false, "Run in dry-run mode: skip Firefly write operations and prefix Mattermost messages with 'Test'")
+	flag.Parse()
+
+	dryRun := dryRunFlag != nil && *dryRunFlag
+
+	if dryRun {
+		log.Println("Running in dry run mode")
+	}
+
 	fireflyUrl := os.Getenv("FIREFLY_URL")
 
 	config, err := common.GetConfig("config.yaml")
@@ -31,19 +42,27 @@ func main() {
 
 			if foundMatch == nil {
 				log.Printf("Found no close matches for $%d.%02d to %s on %s", info.Amount.Dollars, info.Amount.Cents, info.DestinationName, info.TransactionDate)
-				newTransactionId, matchedAccountName, err := firefly.CreateTransaction(info)
+				newTransactionId, matchedAccountName, err := firefly.CreateTransaction(info, dryRun)
+
 				if err != nil {
 					log.Fatal(err)
 				}
+
 				url := fmt.Sprintf("%s/transactions/show/%d", fireflyUrl, newTransactionId)
 
-				message := fmt.Sprintf(`## [New Transaction Created From Email](%s)
+				prefix := ""
+				if dryRun {
+					prefix = "Test "
+				}
+
+				message := fmt.Sprintf(`## %s[New Transaction Created From Email](%s)
 
 Please confirm:
 
 **Destination**: %s -> %s
 **Amount**: $%d.%02d
 **Date**: %s`,
+					prefix,
 					url,
 					info.DestinationName,
 					*matchedAccountName,
@@ -106,6 +125,8 @@ An email was received that could not be parsed. This may be a bug or it may be a
 			}
 		}
 
-		email.MarkRead(t.Uid)
+		if !dryRun {
+			email.MarkRead(t.Uid)
+		}
 	}
 }

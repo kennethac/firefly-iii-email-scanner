@@ -289,7 +289,7 @@ func GetExistingTransaction(t common.TransactionInfo) *TransactionRead {
 }
 
 // Creates a transaction in Firefly according to the information provided.
-func CreateTransaction(transaction common.TransactionInfo) (int, *string, error) {
+func CreateTransaction(transaction common.TransactionInfo, dryRun bool) (int, *string, error) {
 	noName := noNameName
 
 	// Set up the context with a timeout
@@ -329,6 +329,10 @@ func CreateTransaction(transaction common.TransactionInfo) (int, *string, error)
 		} else {
 			body.Transactions[0].Type = Withdrawal
 		}
+	}
+
+	if dryRun {
+		return 0, matchingAccountName, nil
 	}
 
 	params := StoreTransactionParams{}
