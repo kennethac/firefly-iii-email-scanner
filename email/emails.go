@@ -6,7 +6,6 @@ import (
 	"log"
 	"os"
 	"regexp"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -139,176 +138,175 @@ func GetTransactions(configs []common.EmailProcessingConfig) []common.EmailTrans
 	}
 	log.Printf("INBOX has %d messages\n", mbox.Messages)
 
-	// Fetch the latest email
 	if mbox.Messages == 0 {
 		log.Println("No messages to fetch")
 		return []common.EmailTransactionInfo{}
 	}
 
-	var fromEmails []string
-	for _, config := range configs {
-		fromEmails = append(fromEmails, config.FromEmail)
-	}
-
-	criteria := imap.NewSearchCriteria()
-	criteria.Header.Set("From", strings.Join(fromEmails, " "))
-	criteria.WithoutFlags = []string{"\\Seen"}
-
-	searchRes, searchErr := c.Search(criteria)
-	if searchErr != nil {
-		log.Fatal("Error searching for email:", searchErr)
-	}
-
-	if len(searchRes) == 0 {
-		log.Println("No emails matching filters were found")
-		return []common.EmailTransactionInfo{}
-	}
-
-	log.Printf("Got %d search results to process\n", len(searchRes))
-
-	seqSet := new(imap.SeqSet)
-	seqSet.AddNum(searchRes...)
-
-	messages := make(chan *imap.Message, mbox.Messages)
-	done := make(chan error, 1)
-
-	section := &imap.BodySectionName{}
-	section.Peek = true
-
-	go func() {
-		done <- c.Fetch(seqSet, []imap.FetchItem{section.FetchItem(), imap.FetchEnvelope, imap.FetchUid}, messages)
-	}()
-
-	if err := <-done; err != nil {
-		log.Fatal("Error fetching message:", err)
-	}
-
 	var result []common.EmailTransactionInfo
 
-	for msg := range messages {
-		messageId := msg.Envelope.MessageId
-		uid := msg.Uid
-		fromAddress := msg.Envelope.From[0].Address()
+	for _, config := range configs {
+		log.Printf("Checking for emails from %s", config.FromEmail)
 
-		if !slices.Contains(fromEmails, fromAddress) {
+		criteria := imap.NewSearchCriteria()
+		criteria.Header.Set("From", config.FromEmail)
+		criteria.WithoutFlags = []string{"\\Seen"}
+
+		searchRes, searchErr := c.Search(criteria)
+		if searchErr != nil {
+			log.Fatal("Error searching for email:", searchErr)
+		}
+
+		if len(searchRes) == 0 {
+			log.Println("No emails matching filters were found")
 			continue
 		}
 
-		m, err := mail.CreateReader(msg.GetBody(section))
-		if err != nil {
-			log.Fatal(err)
+		log.Printf("Got %d search results to process\n", len(searchRes))
+
+		seqSet := new(imap.SeqSet)
+		seqSet.AddNum(searchRes...)
+
+		messages := make(chan *imap.Message, mbox.Messages)
+		done := make(chan error, 1)
+
+		section := &imap.BodySectionName{}
+		section.Peek = true
+
+		go func() {
+			done <- c.Fetch(seqSet, []imap.FetchItem{section.FetchItem(), imap.FetchEnvelope, imap.FetchUid}, messages)
+		}()
+
+		if err := <-done; err != nil {
+			log.Fatal("Error fetching message:", err)
 		}
 
-		var textPart *PlainTextPart
-		var htmlPart *HtmlTextPart
+		for msg := range messages {
+			messageId := msg.Envelope.MessageId
+			uid := msg.Uid
 
-		for {
-			part, err := m.NextPart()
+			m, err := mail.CreateReader(msg.GetBody(section))
 			if err != nil {
-				if err == io.EOF {
+				log.Fatal(err)
+			}
+
+			var textPart *PlainTextPart
+			var htmlPart *HtmlTextPart
+
+			for {
+				part, err := m.NextPart()
+				if err != nil {
+					if err == io.EOF {
+						break
+					}
+					log.Printf("(skip mail): parse part: %v", err)
 					break
 				}
-				log.Printf("(skip mail): parse part: %v", err)
-				break
-			}
 
-			switch part.Header.(type) {
-			case *mail.InlineHeader:
-				contentType := part.Header.Get("Content-Type")
-				if strings.Contains(contentType, "text/plain") {
-					if textPart != nil {
-						log.Printf("Skipping a second inline text section")
-						continue
-					}
-					body, err := io.ReadAll(part.Body)
-					if err != nil {
-						log.Printf("(skip) read plain body: %v", err)
-					} else {
-						textPart = &PlainTextPart{
-							MessageId: messageId,
-							Uid:       uid,
-							PlainText: string(body),
+				switch part.Header.(type) {
+				case *mail.InlineHeader:
+					contentType := part.Header.Get("Content-Type")
+					if strings.Contains(contentType, "text/plain") {
+						if textPart != nil {
+							log.Printf("Skipping a second inline text section")
+							continue
 						}
-					}
-				} else if strings.Contains(contentType, "text/html") {
-					if htmlPart != nil {
-						log.Printf("Skipping a second inline HTML section")
-						continue
-					}
-					body, err := io.ReadAll(part.Body)
-					if err != nil {
-						log.Printf("Failed to read HTML: %v", err)
-					} else {
-						htmlPart = &HtmlTextPart{
-							MessageId: messageId,
-							HtmlText:  string(body),
+						body, err := io.ReadAll(part.Body)
+						if err != nil {
+							log.Printf("(skip) read plain body: %v", err)
+						} else {
+							textPart = &PlainTextPart{
+								MessageId: messageId,
+								Uid:       uid,
+								PlainText: string(body),
+							}
 						}
-					}
-				}
-			case *mail.AttachmentHeader:
-				log.Printf("Skipping attachment.")
-			default:
-				log.Printf("Not sure what I've seen here")
-			}
-		}
-
-		var transaction *common.TransactionInfo
-		if textPart != nil {
-			transaction = processEmail(textPart.GetText(), configs)
-		} else if htmlPart != nil {
-			transaction = processEmail(htmlPart.GetText(), configs)
-		}
-
-		result = append(result, common.EmailTransactionInfo{
-			Uid:    uid,
-			MailId: messageId,
-			Info:   transaction,
-		})
-	}
-
-	return result
-}
-
-func processEmail(body string, configs []common.EmailProcessingConfig) *common.TransactionInfo {
-	for _, config := range configs {
-		for _, step := range config.ProcessingSteps {
-			if step.Discriminator.Type == "plainTextBodyRegex" {
-				matched, _ := regexp.MatchString(step.Discriminator.Regex, body)
-				if matched {
-					transaction := common.TransactionInfo{
-						SourceAccountId: step.SourceAccountId,
-					}
-					for _, extractionStep := range step.ExtractionSteps {
-						re := regexp.MustCompile("(?m)" + extractionStep.Regex)
-						matches := re.FindStringSubmatch(body)
-						if matches == nil {
-							log.Fatalf("Failed to extract all info from email because regex `%s` was not found\n%s", extractionStep.Regex, body)
+					} else if strings.Contains(contentType, "text/html") {
+						if htmlPart != nil {
+							log.Printf("Skipping a second inline HTML section")
+							continue
 						}
-						for _, targetField := range extractionStep.TargetFields {
-							value := matches[targetField.GroupNumber]
-							switch targetField.TargetField {
-							case "dollars":
-								dollars, _ := strconv.Atoi(strings.ReplaceAll(value, ",", ""))
-								transaction.Amount.Dollars = dollars
-							case "cents":
-								cents, _ := strconv.Atoi(value)
-								transaction.Amount.Cents = cents
-							case "transactionDate":
-								date, err := time.Parse("01/02/06", strings.TrimSpace(value))
-								if err != nil {
-									log.Fatal(err)
-								}
-								transaction.TransactionDate = date
-							case "destinationAccount":
-								transaction.DestinationName = strings.TrimSpace(value)
+						body, err := io.ReadAll(part.Body)
+						if err != nil {
+							log.Printf("Failed to read HTML: %v", err)
+						} else {
+							htmlPart = &HtmlTextPart{
+								MessageId: messageId,
+								HtmlText:  string(body),
 							}
 						}
 					}
-					return &transaction
+				case *mail.AttachmentHeader:
+					log.Printf("Skipping attachment.")
+				default:
+					log.Printf("Not sure what I've seen here")
 				}
+			}
+
+			var transaction *common.TransactionInfo
+			if textPart != nil {
+				transaction = processEmail(textPart.GetText(), config)
+			} else if htmlPart != nil {
+				transaction = processEmail(htmlPart.GetText(), config)
+			} else {
+				log.Println("No valid parts found for email")
+			}
+
+			result = append(result, common.EmailTransactionInfo{
+				Uid:    uid,
+				MailId: messageId,
+				Info:   transaction,
+			})
+		}
+	}
+
+	log.Printf("Returning %d transactions", len(result))
+	return result
+}
+
+func processEmail(body string, config common.EmailProcessingConfig) *common.TransactionInfo {
+	for _, step := range config.ProcessingSteps {
+		if step.Discriminator.Type == "plainTextBodyRegex" {
+			matched, _ := regexp.MatchString(step.Discriminator.Regex, body)
+			if matched {
+				transaction := common.TransactionInfo{
+					SourceAccountId: step.SourceAccountId,
+				}
+				for _, extractionStep := range step.ExtractionSteps {
+					re := regexp.MustCompile("(?m)" + extractionStep.Regex)
+					matches := re.FindStringSubmatch(body)
+					if matches == nil {
+						log.Fatalf("Failed to extract all info from email because regex `%s` was not found\n%s", extractionStep.Regex, body)
+					}
+					for _, targetField := range extractionStep.TargetFields {
+						value := matches[targetField.GroupNumber]
+						switch targetField.TargetField {
+						case "dollars":
+							dollars, _ := strconv.Atoi(strings.ReplaceAll(value, ",", ""))
+							transaction.Amount.Dollars = dollars
+						case "cents":
+							cents, _ := strconv.Atoi(value)
+							transaction.Amount.Cents = cents
+						case "transactionDate":
+							format := "01/02/06"
+							if targetField.Format != nil {
+								format = *targetField.Format
+							}
+							date, err := time.Parse(format, strings.TrimSpace(value))
+							if err != nil {
+								log.Fatal(err)
+							}
+							transaction.TransactionDate = date
+						case "destinationAccount":
+							transaction.DestinationName = strings.TrimSpace(value)
+						}
+					}
+				}
+				return &transaction
 			}
 		}
 	}
+
 	log.Printf("No processing step matched for email\n%s", body)
 	return nil
 }

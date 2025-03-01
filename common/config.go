@@ -34,8 +34,9 @@ type ExtractionStep struct {
 }
 
 type TargetField struct {
-	GroupNumber int    `yaml:"groupNumber"`
-	TargetField string `yaml:"targetField"`
+	GroupNumber int     `yaml:"groupNumber"`
+	TargetField string  `yaml:"targetField"`
+	Format      *string `yaml:"format"`
 }
 
 func GetConfig(configFileLocation string) (*Config, error) {
