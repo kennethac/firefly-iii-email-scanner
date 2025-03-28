@@ -10,10 +10,11 @@ with cron or similar; a Firefly III instance; a Mattermost instance (currently
 required for notifications); an email to which you can get IMAP credentials; and
 a bank which will send transaction alerts to that email.
 
-The executable will read your recent, unread emails for transactions and then check for
-close matches in your Firefly III instance. If one is not found, it will create
-one based off of the information in the email. Either way, it will then notify
-you via a message in a Mattermost channel and mark the email as read.
+The executable will read your recent, unread emails for transactions and then
+check for close matches in your Firefly III instance. If one is not found, it
+will create one based off of the information in the email. Either way, it will
+then notify you via a message in a Mattermost channel and mark the email as
+read.
 
 ## Setup
 
@@ -153,8 +154,8 @@ process_emails:
 
 ### Install executable
 
-The executable can be built from source or downloaded from the GitHub releases
-on this project.
+The executable can be built from source or downloaded from
+[the GitHub releases on this project](https://github.com/kennethac/firefly-iii-email-scanner/releases).
 
 ### Schedule Executable
 
