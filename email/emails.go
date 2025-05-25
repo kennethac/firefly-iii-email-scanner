@@ -252,6 +252,18 @@ func GetTransactions(configs []common.EmailProcessingConfig) []common.EmailTrans
 				log.Println("No valid parts found for email")
 			}
 
+			// ---- START of area to modify ----
+			if transaction != nil && transaction.TransactionDate.IsZero() {
+				// If date wasn't set by processEmail, use envelope date
+				if msg.Envelope != nil && !msg.Envelope.Date.IsZero() { // Ensure envelope and date are not nil/zero
+					log.Printf("Transaction date not found in email body for message ID %s. Using email received time.", messageId)
+					transaction.TransactionDate = msg.Envelope.Date.UTC()
+				} else {
+					log.Printf("WARNING: Cannot set fallback transaction date for message ID %s as envelope or envelope date is nil/zero.", messageId)
+				}
+			}
+			// ---- END of area to modify ----
+
 			result = append(result, common.EmailTransactionInfo{
 				Uid:    uid,
 				MailId: messageId,
@@ -292,11 +304,21 @@ func processEmail(body string, config common.EmailProcessingConfig) *common.Tran
 							if targetField.Format != nil {
 								format = *targetField.Format
 							}
-							date, err := time.Parse(format, strings.TrimSpace(value))
-							if err != nil {
-								log.Fatal(err)
+
+							if targetField.TimeZone == nil || *targetField.TimeZone == "" {
+								log.Fatal("TimeZone is required in email processing configuration when extracting transactionDate.")
 							}
-							transaction.TransactionDate = date
+
+							loc, err := time.LoadLocation(*targetField.TimeZone)
+							if err != nil {
+								log.Fatalf("Failed to load timezone: %s %v", *targetField.TimeZone, err)
+							}
+
+							date, err := time.ParseInLocation(format, strings.TrimSpace(value), loc)
+							if err != nil {
+								log.Fatalf("Failed to parse date with timezone: %v", err)
+							}
+							transaction.TransactionDate = date.UTC()
 						case "destinationAccount":
 							transaction.DestinationName = strings.TrimSpace(value)
 						}

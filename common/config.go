@@ -37,6 +37,7 @@ type TargetField struct {
 	GroupNumber int     `yaml:"groupNumber"`
 	TargetField string  `yaml:"targetField"`
 	Format      *string `yaml:"format"`
+	TimeZone    *string `yaml:"timeZone,omitempty"` // New field
 }
 
 func GetConfig(configFileLocation string) (*Config, error) {
