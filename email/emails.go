@@ -98,13 +98,13 @@ func ParseText(plainText string) common.TransactionInfo {
 			if timeParseError == nil {
 				retVal.TransactionDate = date
 			} else {
-				log.Fatal(timeParseError)
+				log.Panic(timeParseError)
 			}
 			continue
 		}
 	}
 	if matches != 3 {
-		log.Fatalf("Failed to extract all info from email\n%s", plainText)
+		log.Panicf("Failed to extract all info from email\n%s", plainText)
 	}
 	return retVal
 }
@@ -121,20 +121,20 @@ func GetTransactions(configs []common.EmailProcessingConfig) []common.EmailTrans
 	var err error
 	c, err = client.DialTLS(server, nil)
 	if err != nil {
-		log.Fatal("Error connecting to server:", err)
+		log.Panic("Error connecting to server:", err)
 	}
 	log.Println("Connected to Gmail IMAP server.")
 
 	// Login
 	if err := c.Login(email, password); err != nil {
-		log.Fatal("Error logging in:", err)
+		log.Panic("Error logging in:", err)
 	}
 	log.Println("Logged in as", email)
 
 	// Select INBOX
 	mbox, err := c.Select("INBOX", false)
 	if err != nil {
-		log.Fatal("Error selecting INBOX:", err)
+		log.Panic("Error selecting INBOX:", err)
 	}
 	log.Printf("INBOX has %d messages\n", mbox.Messages)
 
@@ -154,7 +154,7 @@ func GetTransactions(configs []common.EmailProcessingConfig) []common.EmailTrans
 
 		searchRes, searchErr := c.Search(criteria)
 		if searchErr != nil {
-			log.Fatal("Error searching for email:", searchErr)
+			log.Panic("Error searching for email:", searchErr)
 		}
 
 		if len(searchRes) == 0 {
@@ -178,7 +178,7 @@ func GetTransactions(configs []common.EmailProcessingConfig) []common.EmailTrans
 		}()
 
 		if err := <-done; err != nil {
-			log.Fatal("Error fetching message:", err)
+			log.Panic("Error fetching message:", err)
 		}
 
 		for msg := range messages {
@@ -187,7 +187,7 @@ func GetTransactions(configs []common.EmailProcessingConfig) []common.EmailTrans
 
 			m, err := mail.CreateReader(msg.GetBody(section))
 			if err != nil {
-				log.Fatal(err)
+				log.Panic(err)
 			}
 
 			var textPart *PlainTextPart
@@ -288,7 +288,7 @@ func processEmail(body string, config common.EmailProcessingConfig) *common.Tran
 					re := regexp.MustCompile("(?m)" + extractionStep.Regex)
 					matches := re.FindStringSubmatch(body)
 					if matches == nil {
-						log.Fatalf("Failed to extract all info from email because regex `%s` was not found\n%s", extractionStep.Regex, body)
+						log.Panicf("Failed to extract all info from email because regex `%s` was not found\n%s", extractionStep.Regex, body)
 					}
 					for _, targetField := range extractionStep.TargetFields {
 						value := matches[targetField.GroupNumber]
@@ -306,17 +306,17 @@ func processEmail(body string, config common.EmailProcessingConfig) *common.Tran
 							}
 
 							if targetField.TimeZone == nil || *targetField.TimeZone == "" {
-								log.Fatal("TimeZone is required in email processing configuration when extracting transactionDate.")
+								log.Panic("TimeZone is required in email processing configuration when extracting transactionDate.")
 							}
 
 							loc, err := time.LoadLocation(*targetField.TimeZone)
 							if err != nil {
-								log.Fatalf("Failed to load timezone: %s %v", *targetField.TimeZone, err)
+								log.Panicf("Failed to load timezone: %s %v", *targetField.TimeZone, err)
 							}
 
 							date, err := time.ParseInLocation(format, strings.TrimSpace(value), loc)
 							if err != nil {
-								log.Fatalf("Failed to parse date with timezone: %v", err)
+								log.Panicf("Failed to parse date with timezone: %v", err)
 							}
 							transaction.TransactionDate = date.UTC()
 						case "destinationAccount":
@@ -336,7 +336,7 @@ func processEmail(body string, config common.EmailProcessingConfig) *common.Tran
 // Marks the email with the given uid as "read".
 func MarkRead(uid uint32) {
 	// if _, selectErr := c.Select("INBOX", false); selectErr != nil {
-	// 	log.Fatal("Unable to select INBOX:", selectErr)
+	// 	log.Panic("Unable to select INBOX:", selectErr)
 	// }
 
 	seqSet := new(imap.SeqSet)
@@ -346,7 +346,7 @@ func MarkRead(uid uint32) {
 	flags := []interface{}{imap.SeenFlag}
 
 	if err := c.Store(seqSet, item, flags, nil); err != nil {
-		log.Fatal("Unable to mark message as read:", err)
+		log.Panic("Unable to mark message as read:", err)
 	} else {
 		log.Printf("Should have marked as read")
 	}
