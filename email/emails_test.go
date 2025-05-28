@@ -2,8 +2,6 @@ package email
 
 import (
 	"firefly-iii-email-scanner/common"
-	"os"
-	"os/exec"
 	"testing"
 	"time"
 )
@@ -54,96 +52,71 @@ func TestProcessEmail_DateExtractionWithValidTimezone(t *testing.T) {
 	}
 }
 
-// TestHelperProcess is called by other tests in a subprocess.
-// It checks GO_TEST_MODE to determine which fatal condition to trigger.
-func TestHelperProcess(t *testing.T) {
-	mode := os.Getenv("GO_TEST_MODE")
-	if mode == "" {
-		return // Not in helper mode, or mode not set.
-	}
-
+func TestProcessEmail_DateExtractionConfigMissingTimezone(t *testing.T) {
 	dateFormat := "01/02/2006 15:04:05"
 	emailBody := "Date: 03/15/2024 10:00:00"
-	var config common.EmailProcessingConfig
-
-	switch mode {
-	case "missingTimezone":
-		config = common.EmailProcessingConfig{
-			ProcessingSteps: []common.ProcessingStep{
-				{
-					Discriminator: common.Discriminator{Type: "plainTextBodyRegex", Regex: ".*"},
-					ExtractionSteps: []common.ExtractionStep{
-						{
-							Regex: "Date: (\\d{2}/\\d{2}/\\d{4} \\d{2}:\\d{2}:\\d{2})",
-							TargetFields: []common.TargetField{
-								{
-									GroupNumber: 1,
-									TargetField: "transactionDate",
-									Format:      &dateFormat,
-									TimeZone:    nil, // Explicitly nil
-								},
+	config := common.EmailProcessingConfig{
+		ProcessingSteps: []common.ProcessingStep{
+			{
+				Discriminator: common.Discriminator{Type: "plainTextBodyRegex", Regex: ".*"},
+				ExtractionSteps: []common.ExtractionStep{
+					{
+						Regex: "Date: (\\d{2}/\\d{2}/\\d{4} \\d{2}:\\d{2}:\\d{2})",
+						TargetFields: []common.TargetField{
+							{
+								GroupNumber: 1,
+								TargetField: "transactionDate",
+								Format:      &dateFormat,
+								TimeZone:    nil, // Explicitly nil
 							},
 						},
 					},
 				},
 			},
-		}
-	case "invalidTimezone":
-		invalidTZ := "Invalid/Timezone"
-		config = common.EmailProcessingConfig{
-			ProcessingSteps: []common.ProcessingStep{
-				{
-					Discriminator: common.Discriminator{Type: "plainTextBodyRegex", Regex: ".*"},
-					ExtractionSteps: []common.ExtractionStep{
-						{
-							Regex: "Date: (\\d{2}/\\d{2}/\\d{4} \\d{2}:\\d{2}:\\d{2})",
-							TargetFields: []common.TargetField{
-								{
-									GroupNumber: 1,
-									TargetField: "transactionDate",
-									Format:      &dateFormat,
-									TimeZone:    &invalidTZ,
-								},
-							},
-						},
-					},
-				},
-			},
-		}
-	default:
-		// Should not happen if called correctly
-		t.Fatalf("TestHelperProcess called with unknown GO_TEST_MODE: %s", mode)
-		return
+		},
 	}
 
-	processEmail(emailBody, config) // This should call log.Fatal and exit for the tested modes
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("Expected log.Panic (panic), but no panic occurred")
+		}
+	}()
+
+	processEmail(emailBody, config) // This should trigger a panic due to missing timezone
 }
 
-// Test for missing timezone - expecting log.Fatal, which means os.Exit(1)
-func TestProcessEmail_DateExtractionConfigMissingTimezone(t *testing.T) {
-	// This is the main test that runs TestHelperProcess in a subprocess
-	cmd := exec.Command(os.Args[0], "-test.run=^TestHelperProcess$")
-	cmd.Env = append(os.Environ(), "GO_TEST_MODE=missingTimezone")
-	err := cmd.Run()
-
-	if e, ok := err.(*exec.ExitError); ok && !e.Success() {
-		// It exited with a non-zero status code, as expected from log.Fatal
-		return
-	}
-	t.Fatalf("Expected log.Fatal (exit status 1), but process ran successfully or with different error: %v", err)
-}
-
-// Test for invalid timezone - expecting log.Fatal
 func TestProcessEmail_DateExtractionConfigInvalidTimezone(t *testing.T) {
-	// This is the main test that runs TestHelperProcess in a subprocess
-	cmd := exec.Command(os.Args[0], "-test.run=^TestHelperProcess$")
-	cmd.Env = append(os.Environ(), "GO_TEST_MODE=invalidTimezone")
-	err := cmd.Run()
-
-	if e, ok := err.(*exec.ExitError); ok && !e.Success() {
-		return // Correctly exited with non-zero status
+	dateFormat := "01/02/2006 15:04:05"
+	emailBody := "Date: 03/15/2024 10:00:00"
+	invalidTZ := "America/Denver"
+	config := common.EmailProcessingConfig{
+		ProcessingSteps: []common.ProcessingStep{
+			{
+				Discriminator: common.Discriminator{Type: "plainTextBodyRegex", Regex: ".*"},
+				ExtractionSteps: []common.ExtractionStep{
+					{
+						Regex: "Date: (\\d{2}/\\d{2}/\\d{4} \\d{2}:\\d{2}:\\d{2})",
+						TargetFields: []common.TargetField{
+							{
+								GroupNumber: 1,
+								TargetField: "transactionDate",
+								Format:      &dateFormat,
+								TimeZone:    &invalidTZ,
+							},
+						},
+					},
+				},
+			},
+		},
 	}
-	t.Fatalf("Expected log.Fatal (exit status 1), but process ran successfully or with different error: %v", err)
+
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatalf("Expected log.Panic (panic), but no panic occurred")
+		}
+	}()
+
+	processEmail(emailBody, config) // This should trigger a panic due to invalid timezone
 }
 
 func TestTransactionDateFallback_NoDateFromProcessEmail(t *testing.T) {
