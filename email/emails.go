@@ -252,7 +252,6 @@ func GetTransactions(configs []common.EmailProcessingConfig) []common.EmailTrans
 				log.Println("No valid parts found for email")
 			}
 
-			// ---- START of area to modify ----
 			if transaction != nil && transaction.TransactionDate.IsZero() {
 				// If date wasn't set by processEmail, use envelope date
 				if msg.Envelope != nil && !msg.Envelope.Date.IsZero() { // Ensure envelope and date are not nil/zero
@@ -262,7 +261,6 @@ func GetTransactions(configs []common.EmailProcessingConfig) []common.EmailTrans
 					log.Printf("WARNING: Cannot set fallback transaction date for message ID %s as envelope or envelope date is nil/zero.", messageId)
 				}
 			}
-			// ---- END of area to modify ----
 
 			result = append(result, common.EmailTransactionInfo{
 				Uid:    uid,
