@@ -88,7 +88,7 @@ func TestProcessEmail_DateExtractionConfigMissingTimezone(t *testing.T) {
 func TestProcessEmail_DateExtractionConfigInvalidTimezone(t *testing.T) {
 	dateFormat := "01/02/2006 15:04:05"
 	emailBody := "Date: 03/15/2024 10:00:00"
-	invalidTZ := "America/Denver"
+	invalidTZ := "Americas/Denver"
 	config := common.EmailProcessingConfig{
 		ProcessingSteps: []common.ProcessingStep{
 			{
