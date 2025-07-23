@@ -144,7 +144,8 @@ process_emails:
             targetFields:
               - groupNumber: 1
                 targetField: transactionDate
-                format: "01/02/2006" # For the transactionDate, you can provide a Go date format string for parsing.
+                timeZone: "America/Denver" # For the transactionDate, you *must* provide a IANA Time Zone database formatted name
+                format: "01/02/2006" # For the transactionDate, you *can* provide a Go date format string for parsing.
           - type: plainTextBodyRegex
             regex: "^To:(.+)$"
             targetFields:
