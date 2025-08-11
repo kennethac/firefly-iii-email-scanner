@@ -348,6 +348,11 @@ func CreateTransaction(transaction common.TransactionInfo, dryRun bool) (int, *s
 		return 0, nil, fmt.Errorf("failed to create transaction: %s", resp.Status())
 	}
 
+	if resp.ApplicationvndApiJSON200 == nil {
+		bodyString := string(resp.Body)
+		return 0, nil, fmt.Errorf("the application 200 body was empty, which is unexpected. It may mean that the request was invalid. It may help to check the Firefly III logs for validation errors. Response:\n%s", bodyString)
+	}
+
 	transactionID, err := strconv.Atoi(resp.ApplicationvndApiJSON200.Data.Id)
 	if err != nil {
 		return 0, nil, fmt.Errorf("failed to parse transaction ID: %v", err)
