@@ -43,10 +43,16 @@ const noNameName = "(no name)"
 func Init() error {
 	url := os.Getenv("FIREFLY_URL")
 	pat := os.Getenv("FIREFLY_PAT")
+	httpClient := http.DefaultClient
+
+	httpClient.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		return http.ErrUseLastResponse
+	}
+
 	var err error
 	client, err = NewClientWithResponses(
 		url+"/api",
-		WithHTTPClient(http.DefaultClient),
+		WithHTTPClient(httpClient),
 		WithRequestEditorFn(func(ctx context.Context, req *http.Request) error {
 			req.Header.Set("Authorization", "Bearer "+pat)
 			return nil
@@ -344,7 +350,7 @@ func CreateTransaction(transaction common.TransactionInfo, dryRun bool) (int, *s
 	}
 
 	if resp.StatusCode() != http.StatusOK {
-		fmt.Printf("Failed to create transaction: %s", resp.Status())
+		fmt.Printf("Failed to create transaction: %s. Body:\n%s", resp.Status(), string(resp.Body))
 		return 0, nil, fmt.Errorf("failed to create transaction: %s", resp.Status())
 	}
 
