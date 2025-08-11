@@ -126,7 +126,7 @@ func getRecentTransactions() ([]TransactionRead, error) {
 
 // Retrieves all (relevant) accounts from Firefly.
 //
-// It excludes inactive, revenue and initial balance type accounts.
+// It excludes inactive, revenue, reconciliation and initial balance type accounts.
 func getAllAccounts() ([]AccountRead, error) {
 	var allAccounts []AccountRead
 	var page int32 = 1
@@ -152,7 +152,8 @@ func getAllAccounts() ([]AccountRead, error) {
 		for _, account := range resp.ApplicationvndApiJSON200.Data {
 			if (account.Attributes.Active == nil || *account.Attributes.Active) &&
 				account.Attributes.Type != "initial-balance" &&
-				account.Attributes.Type != "revenue" {
+				account.Attributes.Type != "revenue" &&
+				account.Attributes.Type != "reconciliation" {
 				allAccounts = append(allAccounts, account)
 			}
 		}
