@@ -6,15 +6,15 @@ This project provides a simple way to automatically insert transactions from an
 email notification into [Firefly III](https://www.firefly-iii.org/).
 
 To use it, you'll need a place to run the executable, preferably on a schedule
-with cron or similar; a Firefly III instance; a Mattermost instance (currently
-required for notifications); an email to which you can get IMAP credentials; and
-a bank which will send transaction alerts to that email.
+with cron or similar; a Firefly III instance; a Mattermost instance (optional,
+for receiving notifications); an email to which you can get IMAP credentials;
+and a bank which will send transaction alerts to that email.
 
 The executable will read your recent, unread emails for transactions and then
 check for close matches in your Firefly III instance. If one is not found, it
 will create one based off of the information in the email. Either way, it will
-then notify you via a message in a Mattermost channel and mark the email as
-read.
+then notify you via a message in a Mattermost channel (if configured) and mark
+the email as read.
 
 ## Setup
 
@@ -22,7 +22,7 @@ The basic steps to getting up and running with the Firefly III Email Scanner
 are:
 
 1. Configure Firefly III
-2. Configure a Mattermost bot
+2. Configure a Mattermost bot (optional)
 3. Set up an email account for notifications
 4. Create email notifications
 5. Create an env file (optional)
@@ -39,14 +39,12 @@ get a new one.
 
 For future steps, take note of your Firefly III URL and your PAT.
 
-### Configure a Mattermost bot
+### Configure a Mattermost bot (Optional)
 
-At present, it is required to have a Mattermost instance and bot account set up
-for notifications about actions taken by the email scanner. It would be easy to
-make optional or generic if anyone wants to open a PR.
+You may optionally configure a Mattermost instance and bot account for
+notifications about actions taken by the email scanner.
 
-Then you'll need to set up a Mattermost bot and add it to your channel by
-following
+To set up a Mattermost bot and add it to your channel, follow
 [these directions](https://developers.mattermost.com/integrate/reference/bot-accounts/).
 I created a new channel specifically for these notifications.
 
@@ -108,7 +106,11 @@ process them. The config file format is a work in progress, but the current
 syntax is explained here:
 
 ```yaml
-# The root list, required.
+# Configuration for the mattermost notifier. Optional.
+# You may also set `notifier: stdout` if you would like the notifications
+# printed to stdout for debugging, instead.
+notifier: mattermost
+# The root list of processing steps, required.
 # Each object in the list contains a instructions per bank "from" email
 process_emails:
   # The email that the bank uses to send the emails to you
