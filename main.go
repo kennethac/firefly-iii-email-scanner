@@ -13,7 +13,7 @@ import (
 
 func main() {
 	// Parse command line flags
-	dryRunFlag := flag.Bool("dry-run", false, "Run in dry-run mode: skip Firefly write operations and prefix Mattermost messages with 'Test'")
+	dryRunFlag := flag.Bool("dry-run", false, "Run in dry-run mode: skip Firefly write operations and prefix notifier messages with 'Test'")
 	flag.Parse()
 
 	dryRun := dryRunFlag != nil && *dryRunFlag
@@ -33,6 +33,17 @@ func main() {
 		log.Fatalf("Failed to initialize Firefly client: %v", err)
 	}
 	defer firefly.Cleanup()
+
+	var notifier common.Notifier
+	if config.Notifier != nil && *config.Notifier == "mattermost" {
+		notifier = &mattermost.MattermostNotifier{}
+	} else if config.Notifier != nil && *config.Notifier == "stdout" {
+		notifier = &StdOutNotifier{}
+	} else if config.Notifier != nil {
+		log.Fatalf("Unknown notifier type: %s. Please choose one of: [mattermost|stdout] or leave blank for no notifier", *config.Notifier)
+	} else {
+		notifier = &NoOpNotifier{}
+	}
 
 	transactions := email.GetTransactions(config.ProcessEmails)
 	for _, t := range transactions {
@@ -70,7 +81,7 @@ Please confirm:
 					info.Amount.Cents,
 					info.TransactionDate.Format("Jan 02 , 2006"))
 
-				if err := mattermost.CreateMessage(message); err != nil {
+				if err := notifier.Notify(message); err != nil {
 					log.Println(err)
 				}
 			} else {
@@ -106,7 +117,7 @@ Please confirm:
 					info.Amount.Cents,
 					foundDate.Format("Jan 02, 2006"))
 
-				if err := mattermost.CreateMessage(message); err != nil {
+				if err := notifier.Notify(message); err != nil {
 					log.Println(err)
 				}
 			}
@@ -120,7 +131,7 @@ An email was received that could not be parsed. This may be a bug or it may be a
 				t.Uid,
 				t.MailId)
 
-			if err := mattermost.CreateMessage(message); err != nil {
+			if err := notifier.Notify(message); err != nil {
 				log.Println(err)
 			}
 		}

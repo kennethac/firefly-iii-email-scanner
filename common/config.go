@@ -7,6 +7,7 @@ import (
 )
 
 type Config struct {
+	Notifier      *string                 `yaml:"notifier"`
 	ProcessEmails []EmailProcessingConfig `yaml:"process_emails"`
 }
 

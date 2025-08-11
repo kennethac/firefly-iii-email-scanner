@@ -16,8 +16,14 @@ type Post struct {
 	Message   string `json:"message"`
 }
 
+type MattermostNotifier struct{}
+
+// Notify sends a message to Mattermost using the configured channel and token.
+func (mn *MattermostNotifier) Notify(message string) error {
+	return CreateMessage(message)
+}
+
 // Sends a message in Mattermost with the given markdown content.
-//
 // Requires that the MATTERMOST_URL, MATTERMOST_TOKEN, and MATTERMOST_CHANNEL
 // environment variables are set.
 func CreateMessage(message string) error {
